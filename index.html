@@ -4,8 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D魔方模拟器</title>
+
+    <!-- ★★★ 修正 1: 添加 Manifest 链接 和 主题颜色 ★★★ -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4CAF50">
+
     <style>
-        /* Base Styles */
+        /* ... 您的所有CSS样式保持不变 ... */
         :root {
             --bg-color: #1e1e1e; --text-color: #e0e0e0; --primary-color: #4CAF50; --secondary-color: #2a2a2a;
             --border-color: #444; --highlight-color: #61dafb; --gold: #FFD700; --silver: #C0C0C0; --bronze: #CD7F32;
@@ -14,8 +19,6 @@
         #main-container { display: flex; height: 100%; }
         #left-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
         #canvas-container { flex: 1; position: relative; min-height: 0; }
-        
-        /* Solve Info Panel (Bottom) */
         #solve-info-panel {
             flex-shrink: 0; padding: 15px; background-color: #252526; text-align: center;
             display: flex; flex-direction: column; gap: 15px;
@@ -41,8 +44,6 @@
             background-color: var(--primary-color); color: white; border-radius: 3px;
             padding: 2px 5px; transform: scale(1.1);
         }
-        
-        /* UI Panel (Right) */
         #ui-panel { width: 320px; background-color: #2a2a2a; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; border-left: 1px solid var(--border-color); }
         h3 { color: var(--primary-color); border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-top: 0; margin-bottom: 15px; }
         .control-group { margin-bottom: 25px; }
@@ -54,10 +55,7 @@
         button.secondary { background-color: #555; }
         .replay-btn { background-color: #007bff; }
         .replay-btn.solution { background-color: #28a745; }
-        /* ★★★ CSS 新增: 删除按钮样式 ★★★ */
         .delete-btn { background-color: #dc3545; }
-        
-        /* Scores List & Items */
         #scores-list { list-style-type: none; padding: 0; margin: 0; flex: 1; min-height: 0; overflow-y: auto; }
         .score-item { background-color: var(--secondary-color); border-radius: 4px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
         .score-item-header { display: flex; justify-content: space-between; align-items: center; }
@@ -68,8 +66,6 @@
         .score-details { display: flex; justify-content: space-between; font-size: 0.9em; color: #999; }
         .speed-control { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
         .speed-control input[type=range] { flex: 1; cursor: pointer; }
-
-        /* Pop-up Chart Container Styles */
         #chart-container {
             position: absolute; top: 45px; right: 0; width: 280px;
             background-color: rgba(42, 42, 42, 0.95); border: 1px solid var(--border-color);
@@ -92,6 +88,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
+    <!-- ... 您的所有 body 内容保持不变 ... -->
     <div id="main-container">
         <div id="left-panel">
             <div id="canvas-container"></div>
@@ -155,21 +152,12 @@
         { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
     </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-        <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').then(registration => {
-                    console.log('SW registered: ', registration);
-                }).catch(registrationError => {
-                    console.log('SW registration failed: ', registrationError);
-                });
-            });
-        }
-    </script>
+
+    <!-- ★★★ 修正 2 & 3: 使用正确的相对路径，并只保留一个注册脚本 ★★★ -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').then(registration => {
+                navigator.serviceWorker.register('./sw.js').then(registration => { // 使用相对路径 './sw.js'
                     console.log('SW registered: ', registration);
                 }).catch(registrationError => {
                     console.log('SW registration failed: ', registrationError);
@@ -177,7 +165,9 @@
             });
         }
     </script>
+    
     <script type="module">
+        // ... 您的所有 type="module" 的JS代码保持不变 ...
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
@@ -281,7 +271,6 @@
             });
         }
 
-        // ... (大部分核心函数不变) ...
         function getGridPosition(worldPosition) { return worldPosition.clone().divideScalar(SCALE_FACTOR).round(); }
         function onMouseDown(event) {
             if (isAnimating) return;
@@ -486,7 +475,6 @@
             if (isSolving) { addScore(timeMs, currentScramble, moveHistory); alert(`恭喜！复原成功，用时: ${formatTime(timeMs)}`); }
             isScrambled = false; isSolving = false; return true;
         }
-
         function addScore(timeMs, scramble, solution) {
             const solutionMoves = solution.join(' ');
             const tps = (solution.length / (timeMs / 1000)) || 0;
@@ -495,8 +483,6 @@
             scores.sort((a, b) => a.timeMs - b.timeMs);
             renderScores();
         }
-
-        // ★★★ JS改动: 列表现在按照最佳成绩排序 ★★★
         function renderScores() {
             scoresList.innerHTML = '';
             const medals = ['🥇', '🥈', '🥉'];
@@ -525,25 +511,19 @@
                 scoresList.appendChild(li);
             });
         }
-        
-        // ★★★ JS新增: 删除成绩的函数 ★★★
         function deleteScore(scoreId) {
             const scoreIndex = scores.findIndex(s => s.id === scoreId);
             if (scoreIndex === -1) return;
-
             const scoreToDelete = scores[scoreIndex];
             if (confirm(`您确定要删除这条成绩吗？\n\n时间: ${formatTime(scoreToDelete.timeMs)}\n日期: ${new Date(scoreToDelete.date).toLocaleDateString()}`)) {
                 scores.splice(scoreIndex, 1);
-                renderScores(); // 重新渲染列表
-
-                // 如果统计窗口是打开的，也更新它
+                renderScores();
                 const chartContainer = document.getElementById('chart-container');
                 if (chartContainer.classList.contains('visible')) {
                     renderTrendChart();
                 }
             }
         }
-
         function calculateAoN(n) {
             if (scores.length < n) return 'N/A';
             const recent = [...scores].sort((a, b) => b.id - a.id).slice(0, n).map(s => s.timeMs);
@@ -553,20 +533,17 @@
             const sum = trimmed.reduce((acc, val) => acc + val, 0);
             return formatTime(Math.round(sum / (n - 2)));
         }
-
         function calculateAverage() {
             if (scores.length === 0) return 'N/A';
             const sum = scores.reduce((acc, s) => acc + s.timeMs, 0);
             return formatTime(Math.round(sum / scores.length));
         }
-        
         function updateStatsDisplay() {
             document.getElementById('stat-pb').textContent = scores.length > 0 ? formatTime(scores[0].timeMs) : 'N/A';
             document.getElementById('stat-ao5').textContent = calculateAoN(5);
             document.getElementById('stat-ao12').textContent = calculateAoN(12);
             document.getElementById('stat-avg').textContent = calculateAverage();
         }
-        
         function renderTrendChart() {
             updateStatsDisplay();
             if (trendChartInstance) trendChartInstance.destroy();
@@ -621,7 +598,6 @@
                 }
             });
         }
-
         function exportScoresToCSV() {
             if (scores.length === 0) { alert("没有成绩可以导出。"); return; }
             const headers = ['Rank', 'ID', '日期', '时间 (ms)', '格式化时间', 'TPS', '打乱公式', '解法步骤'];
@@ -644,8 +620,6 @@
             link.click();
             document.body.removeChild(link);
         }
-
-        // ★★★ JS改动: handleScoreboardClick 现在可以处理 delete 动作 ★★★
         async function handleScoreboardClick(event) {
             const target = event.target.closest('button');
             if (isAnimating || !target || !target.dataset.action) return;
@@ -677,23 +651,19 @@
                 isScrambled = true;
             }
         }
-        
         function invertMove(move) {
             const base = move.replace(/['2]/g, '');
             if (move.includes('2')) return base + '2';
             return move.includes("'") ? base : base + "'";
         }
-        
         function invertMovesArray(movesArr) {
             return movesArr.slice().reverse().map(invertMove);
         }
-        
         function invertMovesStr(movesStr) {
             if (!movesStr || !movesStr.trim()) return [];
             const arr = movesStr.trim().split(/\s+/).filter(Boolean);
             return invertMovesArray(arr);
         }
-        
         async function autoSolveByInverse() {
             if (isAnimating) return;
             const hasScramble = !!currentScramble && currentScramble.trim().length > 0;
