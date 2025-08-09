@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D魔方模拟器</title>
+    <style>
+        /* Base Styles */
+        :root {
+            --bg-color: #1e1e1e; --text-color: #e0e0e0; --primary-color: #4CAF50; --secondary-color: #2a2a2a;
+            --border-color: #444; --highlight-color: #61dafb; --gold: #FFD700; --silver: #C0C0C0; --bronze: #CD7F32;
+        }
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-color); height: 100vh; }
+        #main-container { display: flex; height: 100%; }
+        #left-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        #canvas-container { flex: 1; position: relative; min-height: 0; }
+        
+        /* Solve Info Panel (Bottom) */
+        #solve-info-panel {
+            flex-shrink: 0; padding: 15px; background-color: #252526; text-align: center;
+            display: flex; flex-direction: column; gap: 15px;
+        }
+        #scramble-controls {
+            display: flex; gap: 10px; align-items: center; justify-content: center;
+            width: 100%; max-width: 900px; margin: 0 auto;
+        }
+        #scramble-display {
+            flex: 1; background-color: var(--secondary-color); padding: 8px 12px; border-radius: 4px;
+            font-family: 'Courier New', Courier, monospace; font-size: 1.1em; border: 1px solid var(--border-color);
+            color: var(--text-color); text-align: center; min-width: 0;
+        }
+        #timer { font-size: 4em; font-weight: bold; color: var(--highlight-color); font-family: 'Orbitron', sans-serif; letter-spacing: 2px; }
+        #move-history {
+            background-color: var(--secondary-color); height: 2.5em; line-height: 2.5em; overflow-x: auto; overflow-y: hidden;
+            padding: 0 15px; border-radius: 4px; font-family: 'Courier New', Courier, monospace;
+            border: 1px solid var(--border-color); margin: 0 auto; width: 100%; max-width: 900px;
+            white-space: nowrap; text-align: left; box-sizing: border-box;
+        }
+        #move-history span { margin-right: 5px; display: inline-block; transition: all 0.1s; }
+        #move-history span.highlight-move {
+            background-color: var(--primary-color); color: white; border-radius: 3px;
+            padding: 2px 5px; transform: scale(1.1);
+        }
+        
+        /* UI Panel (Right) */
+        #ui-panel { width: 320px; background-color: #2a2a2a; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; border-left: 1px solid var(--border-color); }
+        h3 { color: var(--primary-color); border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-top: 0; margin-bottom: 15px; }
+        .control-group { margin-bottom: 25px; }
+        .control-group.fill-space { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; }
+        .button-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        button { background-color: var(--primary-color); color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px; font-size: 14px; transition: all 0.2s; white-space: nowrap; }
+        button:hover { filter: brightness(1.1); }
+        button:active { transform: scale(0.97); }
+        button.secondary { background-color: #555; }
+        .replay-btn { background-color: #007bff; }
+        .replay-btn.solution { background-color: #28a745; }
+        /* ★★★ CSS 新增: 删除按钮样式 ★★★ */
+        .delete-btn { background-color: #dc3545; }
+        
+        /* Scores List & Items */
+        #scores-list { list-style-type: none; padding: 0; margin: 0; flex: 1; min-height: 0; overflow-y: auto; }
+        .score-item { background-color: var(--secondary-color); border-radius: 4px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .score-item-header { display: flex; justify-content: space-between; align-items: center; }
+        .score-time { font-weight: bold; font-size: 1.1em; }
+        .score-date { font-size: 0.8em; color: #aaa; }
+        .score-medal { font-size: 1.2em; margin-right: 8px; }
+        .score-actions { display: flex; gap: 10px; }
+        .score-details { display: flex; justify-content: space-between; font-size: 0.9em; color: #999; }
+        .speed-control { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .speed-control input[type=range] { flex: 1; cursor: pointer; }
+
+        /* Pop-up Chart Container Styles */
+        #chart-container {
+            position: absolute; top: 45px; right: 0; width: 280px;
+            background-color: rgba(42, 42, 42, 0.95); border: 1px solid var(--border-color);
+            border-radius: 8px; padding: 15px; z-index: 10;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5); backdrop-filter: blur(5px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            opacity: 0; transform: translate(15px, -15px) scale(0.95);
+            pointer-events: none;
+        }
+        #chart-container.visible { opacity: 1; transform: translate(0, 0) scale(1); pointer-events: all; }
+        #stats-display {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px;
+            padding-bottom: 15px; margin-bottom: 15px; border-bottom: 1px solid var(--border-color);
+        }
+        .stat-item { display: flex; justify-content: space-between; font-size: 14px; }
+        .stat-label { color: #aaa; }
+        .stat-value { font-weight: bold; }
+        #chart-canvas-wrapper { height: 150px; }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="main-container">
+        <div id="left-panel">
+            <div id="canvas-container"></div>
+            <div id="solve-info-panel">
+                <div id="scramble-controls">
+                    <button id="generate-scramble">打乱公式</button>
+                    <input type="text" id="scramble-display" placeholder="点击“打乱公式”或在此输入公式...">
+                    <button id="execute-scramble">执行公式</button>
+                    <button class="secondary" id="copy-scramble">复制</button>
+                    <button class="secondary" id="export-scramble">下载</button>
+                </div>
+                <div id="timer">00:00.000</div>
+                <div>
+                    <button id="auto-solve-btn">生成解法序列（自动补全复原）</button>
+                </div>
+                <div id="move-history"></div>
+            </div>
+        </div>
+        
+        <div id="ui-panel">
+            <div class="control-group">
+                <h3>设置</h3>
+                <div class="speed-control">
+                    <span>速度:</span>
+                    <input type="range" id="speed-slider" min="50" max="500" value="150">
+                    <span id="speed-value">150ms</span>
+                </div>
+            </div>
+            <div class="control-group">
+                <h3>控制</h3>
+                <div class="button-grid">
+                    <button id="reset-cube">重置魔方</button>
+                    <button id="reset-view">重置视角</button>
+                    <button id="reset-timer">重置计时</button>
+                </div>
+            </div>
+
+            <div class="control-group fill-space">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3>成绩记录</h3>
+                    <div>
+                        <button id="chart-toggle-btn" title="显示统计与图表" style="padding: 5px 10px; font-size: 16px; background-color: transparent; border: 1px solid var(--border-color); margin-right: 5px;">📊</button>
+                        <button id="export-scores-btn" title="导出成绩为CSV" style="padding: 5px 10px; font-size: 16px; background-color: transparent; border: 1px solid var(--border-color);">💾</button>
+                    </div>
+                </div>
+                <div id="chart-container">
+                    <div id="stats-display">
+                        <div class="stat-item"><span class="stat-label">Best</span><span class="stat-value" id="stat-pb">N/A</span></div>
+                        <div class="stat-item"><span class="stat-label">Ao5</span><span class="stat-value" id="stat-ao5">N/A</span></div>
+                        <div class="stat-item"><span class="stat-label">Ao12</span><span class="stat-value" id="stat-ao12">N/A</span></div>
+                        <div class="stat-item"><span class="stat-label">Avg</span><span class="stat-value" id="stat-avg">N/A</span></div>
+                    </div>
+                    <div id="chart-canvas-wrapper"><canvas id="scores-chart"></canvas></div>
+                </div>
+                <ul id="scores-list"></ul>
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').then(registration => {
+                    console.log('SW registered: ', registration);
+                }).catch(registrationError => {
+                    console.log('SW registration failed: ', registrationError);
+                });
+            });
+        }
+    </script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').then(registration => {
+                    console.log('SW registered: ', registration);
+                }).catch(registrationError => {
+                    console.log('SW registration failed: ', registrationError);
+                });
+            });
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ... (大部分变量声明不变) ...
+        const canvasContainer = document.getElementById('canvas-container'), scrambleDisplay = document.getElementById('scramble-display'),
+              timerDisplay = document.getElementById('timer'), moveHistoryDisplay = document.getElementById('move-history'),
+              scoresList = document.getElementById('scores-list'), speedSlider = document.getElementById('speed-slider'),
+              speedValue = document.getElementById('speed-value');
+
+        let scene, camera, renderer, controls, cubeGroup, cubies = [];
+        const CUBIE_SIZE = 1, CUBIE_GAP = 0.05, SCALE_FACTOR = CUBIE_SIZE + CUBIE_GAP, INITIAL_CAM_POS = new THREE.Vector3(5, 5, 5);
+
+        let isAnimating = false, isScrambled = false, isSolving = false;
+        let moveHistory = [], scores = [];
+        let timerInterval, startTime = 0, currentScramble = '';
+        let animationSpeed = 150;
+        let trendChartInstance = null;
+
+        let raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
+        let startPoint, endPoint, normalVector, selectedCubie;
+
+        const ROTATION_MAP = {
+            'U': { axis: 'y', slice: 1, direction: -1 }, 'U_': { axis: 'y', slice: 1, direction: 1 },
+            'D': { axis: 'y', slice: -1, direction: 1 }, 'D_': { axis: 'y', slice: -1, direction: -1 },
+            'E': { axis: 'y', slice: 0, direction: 1 }, 'E_': { axis: 'y', slice: 0, direction: -1 },
+            'R': { axis: 'x', slice: 1, direction: -1 }, 'R_': { axis: 'x', slice: 1, direction: 1 },
+            'L': { axis: 'x', slice: -1, direction: 1 }, 'L_': { axis: 'x', slice: -1, direction: -1 },
+            'M': { axis: 'x', slice: 0, direction: 1 }, 'M_': { axis: 'x', slice: 0, direction: -1 },
+            'F': { axis: 'z', slice: 1, direction: -1 }, 'F_': { axis: 'z', slice: 1, direction: 1 },
+            'B': { axis: 'z', slice: -1, direction: 1 }, 'B_': { axis: 'z', slice: -1, direction: -1 },
+            'S': { axis: 'z', slice: 0, direction: -1 }, 'S_': { axis: 'z', slice: 0, direction: 1 },
+        };
+        init();
+
+        function init() { setupScene(); createCube(); setupEventListeners(); animate(); }
+
+        function setupScene() {
+            scene = new THREE.Scene(); scene.background = new THREE.Color(0x1e1e1e);
+            camera = new THREE.PerspectiveCamera(50, canvasContainer.clientWidth / canvasContainer.clientHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+            canvasContainer.appendChild(renderer.domElement);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.0), directionalLight = new THREE.DirectionalLight(0xffffff, 2.0);
+            directionalLight.position.set(5, 10, 7.5); scene.add(ambientLight, directionalLight);
+            controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
+            resetCameraView();
+        }
+
+        function createCube() {
+            if (cubeGroup) scene.remove(cubeGroup);
+            cubeGroup = new THREE.Group(); cubies = [];
+            const colors = {
+                front:  new THREE.MeshStandardMaterial({ color: 0x00ff00 }), up: new THREE.MeshStandardMaterial({ color: 0xffffff }),
+                back:   new THREE.MeshStandardMaterial({ color: 0x0000ff }), down: new THREE.MeshStandardMaterial({ color: 0xffff00 }),
+                right:  new THREE.MeshStandardMaterial({ color: 0xff0000 }), left: new THREE.MeshStandardMaterial({ color: 0xffa500 }),
+                inner:  new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 })
+            };
+            const geometry = new THREE.BoxGeometry(CUBIE_SIZE, CUBIE_SIZE, CUBIE_SIZE);
+            for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++) {
+                if (x === 0 && y === 0 && z === 0) continue;
+                const materials = [ x === 1 ? colors.right : colors.inner, x === -1 ? colors.left : colors.inner, y === 1 ? colors.up : colors.inner, y === -1 ? colors.down : colors.inner, z === 1 ? colors.front : colors.inner, z === -1 ? colors.back : colors.inner ];
+                const cubie = new THREE.Mesh(geometry, materials);
+                const position = new THREE.Vector3(x, y, z).multiplyScalar(SCALE_FACTOR);
+                cubie.position.copy(position);
+                cubeGroup.add(cubie); cubies.push(cubie);
+            }
+            scene.add(cubeGroup);
+        }
+
+        function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+        
+        function setupEventListeners() {
+            window.addEventListener('resize', () => { camera.aspect = canvasContainer.clientWidth / canvasContainer.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight); });
+            renderer.domElement.addEventListener('pointerdown', onMouseDown);
+            renderer.domElement.addEventListener('pointermove', onMouseMove);
+            renderer.domElement.addEventListener('pointerup', onMouseUp);
+            document.getElementById('generate-scramble').addEventListener('click', generateAndApplyScramble);
+            document.getElementById('execute-scramble').addEventListener('click', executeImportedScramble);
+            document.getElementById('reset-cube').addEventListener('click', resetCubeState);
+            document.getElementById('reset-view').addEventListener('click', resetCameraView);
+            document.getElementById('copy-scramble').addEventListener('click', copyScramble);
+            document.getElementById('export-scramble').addEventListener('click', exportScramble);
+            document.getElementById('reset-timer').addEventListener('click', resetTimer);
+            scoresList.addEventListener('click', handleScoreboardClick);
+            speedSlider.addEventListener('input', (e) => { animationSpeed = parseInt(e.target.value); speedValue.textContent = `${animationSpeed}ms`; });
+            document.getElementById('auto-solve-btn').addEventListener('click', autoSolveByInverse);
+            document.getElementById('export-scores-btn').addEventListener('click', exportScoresToCSV);
+            
+            const chartToggleBtn = document.getElementById('chart-toggle-btn');
+            const chartContainer = document.getElementById('chart-container');
+            chartToggleBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                const isVisible = chartContainer.classList.toggle('visible');
+                if (isVisible) {
+                    renderTrendChart();
+                }
+            });
+            document.addEventListener('click', (event) => {
+                if (chartContainer.classList.contains('visible') && !chartContainer.contains(event.target)) {
+                    chartContainer.classList.remove('visible');
+                }
+            });
+        }
+
+        // ... (大部分核心函数不变) ...
+        function getGridPosition(worldPosition) { return worldPosition.clone().divideScalar(SCALE_FACTOR).round(); }
+        function onMouseDown(event) {
+            if (isAnimating) return;
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1; mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera); const intersects = raycaster.intersectObjects(cubies);
+            if (intersects.length > 0) {
+                controls.enabled = false; selectedCubie = intersects[0].object;
+                normalVector = intersects[0].face.normal.clone().applyQuaternion(selectedCubie.quaternion).round();
+                startPoint = intersects[0].point;
+            }
+        }
+        function onMouseMove(event) {
+            if (!startPoint) return;
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1; mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normalVector, startPoint);
+            endPoint = new THREE.Vector3(); raycaster.ray.intersectPlane(plane, endPoint);
+        }
+        async function onMouseUp() {
+            if (!startPoint || !endPoint || !selectedCubie) { controls.enabled = true; resetDragState(); return; }
+            const dragVector = endPoint.clone().sub(startPoint);
+            if (dragVector.length() < 0.2) { controls.enabled = true; resetDragState(); return; }
+            if (isScrambled && !isSolving) { startTimer(); isSolving = true; }
+            const worldAxes = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0), z: new THREE.Vector3(0, 0, 1) };
+            const faceAxis = Object.keys(worldAxes).reduce((a, b) => Math.abs(normalVector[a]) > Math.abs(normalVector[b]) ? a : b);
+            const dragAxis = Object.keys(worldAxes).reduce((a, b) => Math.abs(dragVector[a]) > Math.abs(dragVector[b]) ? a : b);
+            if (faceAxis === dragAxis) { controls.enabled = true; resetDragState(); return; }
+            let rotationAxis, direction;
+            if (faceAxis === 'x') {
+                if (dragAxis === 'y') { rotationAxis = worldAxes.z; direction = Math.sign(normalVector.x) * Math.sign(dragVector.y); } 
+                else { rotationAxis = worldAxes.y; direction = -Math.sign(normalVector.x) * Math.sign(dragVector.z); }
+            } else if (faceAxis === 'y') {
+                if (dragAxis === 'x') { rotationAxis = worldAxes.y; direction = -Math.sign(normalVector.y) * Math.sign(dragVector.x); } 
+                else { rotationAxis = worldAxes.x; direction = Math.sign(normalVector.y) * Math.sign(dragVector.z); }
+            } else {
+                if (dragAxis === 'x') { rotationAxis = worldAxes.y; direction = Math.sign(normalVector.z) * Math.sign(dragVector.x); } 
+                else { rotationAxis = worldAxes.x; direction = -Math.sign(normalVector.z) * Math.sign(dragVector.y); }
+            }
+            const slice = getSlice(selectedCubie, rotationAxis);
+            logMove(rotationAxis, selectedCubie, direction); 
+            await rotateSliceAnimated(slice, rotationAxis, direction * Math.PI / 2, 250);
+            resetDragState(); controls.enabled = true;
+            if (isSolving) { checkIfSolved(); }
+        }
+        function resetDragState() { startPoint = endPoint = selectedCubie = normalVector = null; }
+        function getSlice(cubie, axis) {
+            const slice = []; const gridPos = getGridPosition(cubie.position); const targetDot = gridPos.dot(axis);
+            for (let c of cubies) { if (Math.abs(getGridPosition(c.position).dot(axis) - targetDot) < 0.1) { slice.push(c); } }
+            return slice;
+        }
+        function snapQuaternionToRightAngles(q) {
+            const m = new THREE.Matrix4().makeRotationFromQuaternion(q);
+            const col = i => new THREE.Vector3().setFromMatrixColumn(m, i);
+            const chooseAxis = (v) => {
+                const ax = Math.abs(v.x), ay = Math.abs(v.y), az = Math.abs(v.z);
+                if (ax >= ay && ax >= az) return new THREE.Vector3(Math.sign(v.x) || 1, 0, 0);
+                if (ay >= ax && ay >= az) return new THREE.Vector3(0, Math.sign(v.y) || 1, 0);
+                return new THREE.Vector3(0, 0, Math.sign(v.z) || 1);
+            };
+            const x = chooseAxis(col(0)); let y = chooseAxis(col(1));
+            let z = new THREE.Vector3().crossVectors(x, y);
+            if (z.lengthSq() < 0.5) {
+                const zCol = col(2); const zSnap = chooseAxis(zCol);
+                y = new THREE.Vector3().crossVectors(zSnap, x); z = new THREE.Vector3().crossVectors(x, y);
+            }
+            x.normalize(); y.normalize(); z.normalize();
+            const snapped = new THREE.Matrix4().makeBasis(x, y, z);
+            return new THREE.Quaternion().setFromRotationMatrix(snapped);
+        }
+        function rotateSliceAnimated(slice, axis, angle, duration) {
+            return new Promise(resolve => {
+                isAnimating = true; const pivot = new THREE.Group(); scene.add(pivot); slice.forEach(c => pivot.attach(c));
+                const finalDuration = duration || animationSpeed; const startTime = performance.now();
+                function animateRotation() {
+                    const t = Math.min(1, (performance.now() - startTime) / finalDuration);
+                    const easedT = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+                    pivot.quaternion.setFromAxisAngle(axis, angle * easedT);
+                    if (t < 1) { requestAnimationFrame(animateRotation); } else {
+                        pivot.updateWorldMatrix(true, true);
+                        while (pivot.children.length > 0) {
+                            const cubie = pivot.children[0];
+                            const worldPos = new THREE.Vector3(), worldQuat = new THREE.Quaternion();
+                            cubie.getWorldPosition(worldPos); cubie.getWorldQuaternion(worldQuat);
+                            cubeGroup.attach(cubie);
+                            cubie.position.copy(getGridPosition(worldPos).multiplyScalar(SCALE_FACTOR));
+                            cubie.quaternion.copy(snapQuaternionToRightAngles(worldQuat));
+                        }
+                        scene.remove(pivot); isAnimating = false; resolve();
+                    }
+                }
+                animateRotation();
+            });
+        }
+        async function executeMoveSequence(movesStr, isReplay = false, highlightContainer = null) {
+            isAnimating = true; controls.enabled = false;
+            const moves = movesStr.trim().split(/\s+/).filter(m => m);
+            const moveElements = highlightContainer ? highlightContainer.children : null;
+            for (let i = 0; i < moves.length; i++) {
+                const move = moves[i];
+                if (!move) continue;
+                if (highlightContainer && moveElements && moveElements[i]) {
+                    if (i > 0 && moveElements[i - 1]) { moveElements[i - 1].classList.remove('highlight-move'); }
+                    moveElements[i].classList.add('highlight-move');
+                    moveElements[i].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                }
+                let sanitizedMove = move.replace("'", "_");
+                const angleMultiplier = move.includes('2') ? 2 : 1;
+                sanitizedMove = sanitizedMove.replace("2", "");
+                const command = ROTATION_MAP[sanitizedMove];
+                if (command) {
+                    const axis = new THREE.Vector3(command.axis === 'x' ? 1 : 0, command.axis === 'y' ? 1 : 0, command.axis === 'z' ? 1 : 0);
+                    await rotateSliceAnimated(getSliceByLayer(axis, command.slice), axis, command.direction * Math.PI / 2 * angleMultiplier);
+                }
+            }
+            if (highlightContainer && moveElements && moves.length > 0 && moveElements[moves.length - 1]) {
+                moveElements[moves.length - 1].classList.remove('highlight-move');
+            }
+            isAnimating = false; controls.enabled = true;
+        }
+        function getSliceByLayer(axis, layer) { return cubies.filter(c => Math.abs(getGridPosition(c.position).dot(axis) - layer) < 0.1); }
+        async function generateAndApplyScramble() {
+            if (isAnimating) return;
+            resetCubeState(); currentScramble = generateScramble(20);
+            scrambleDisplay.value = currentScramble;
+            await executeMoveSequence(currentScramble); isScrambled = true;
+        }
+        function generateScramble(steps) {
+            const faces = ['U', 'D', 'L', 'R', 'F', 'B']; const modifiers = ['', "'", '2']; let scramble = [], lastFace = '';
+            for (let i = 0; i < steps; i++) { let face; do { face = faces[Math.floor(Math.random() * faces.length)]; } while (face === lastFace); scramble.push(face + modifiers[Math.floor(Math.random() * modifiers.length)]); lastFace = face; }
+            return scramble.join(' ');
+        }
+        function resetCubeState() {
+            stopTimer(); resetTimerDisplay(); createCube();
+            currentScramble = ''; scrambleDisplay.value = '';
+            moveHistory = []; updateMoveHistoryDisplay();
+            isScrambled = false; isSolving = false;
+        }
+        function resetCameraView() { camera.position.copy(INITIAL_CAM_POS); controls.target.set(0, 0, 0); controls.update(); }
+        function copyScramble() { navigator.clipboard.writeText(scrambleDisplay.value).then(() => alert('打乱公式已复制!')); }
+        function exportScramble() { 
+            const textToExport = scrambleDisplay.value;
+            if (!textToExport) { alert("没有公式可下载。"); return; }
+            const blob = new Blob([textToExport], { type: 'text/plain' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'scramble.txt'; a.click(); URL.revokeObjectURL(url); 
+        }
+        async function executeImportedScramble() {
+            if (isAnimating) return; 
+            const scramble = scrambleDisplay.value;
+            if (!scramble.trim()) return alert('请在文本框中输入或生成一个打乱公式！');
+            resetCubeState(); currentScramble = scramble; scrambleDisplay.value = currentScramble; 
+            await executeMoveSequence(currentScramble); isScrambled = true;
+        }
+        function startTimer() { if (timerInterval) clearInterval(timerInterval); startTime = Date.now(); timerInterval = setInterval(updateTimerDisplay, 47); }
+        function stopTimer() { clearInterval(timerInterval); timerInterval = null; }
+        function resetTimer() { stopTimer(); resetTimerDisplay(); }
+        function updateTimerDisplay() { timerDisplay.textContent = formatTime(Date.now() - startTime); }
+        function resetTimerDisplay() { timerDisplay.textContent = "00:00.000"; }
+        function formatTime(ms) { const m = String(Math.floor(ms / 60000)).padStart(2, '0'), s = String(Math.floor((ms % 60000) / 1000)).padStart(2, '0'), milli = String(ms % 1000).padStart(3, '0'); return `${m}:${s}.${milli}`; }
+        function logMove(rotationAxis, cubie, direction) {
+            const gridPos = getGridPosition(cubie.position); let move = '';
+            if (Math.abs(rotationAxis.x) > 0.5) {
+                const layer = Math.round(gridPos.x);
+                if (layer === 1) move = direction === -1 ? 'R' : 'R\''; else if (layer === -1) move = direction === 1 ? 'L' : 'L\''; else move = direction === 1 ? 'M' : 'M\'';
+            } else if (Math.abs(rotationAxis.y) > 0.5) {
+                const layer = Math.round(gridPos.y);
+                if (layer === 1) move = direction === -1 ? 'U' : 'U\''; else if (layer === -1) move = direction === 1 ? 'D' : 'D\''; else move = direction === 1 ? 'E' : 'E\'';
+            } else {
+                const layer = Math.round(gridPos.z);
+                if (layer === 1) move = direction === -1 ? 'F' : 'F\''; else if (layer === -1) move = direction === 1 ? 'B' : 'B\''; else move = direction === -1 ? 'S' : 'S\'';
+            }
+            if(move) { moveHistory.push(move); updateMoveHistoryDisplay(); }
+        }
+        function updateMoveHistoryDisplay() { moveHistoryDisplay.innerHTML = moveHistory.join(' '); moveHistoryDisplay.scrollLeft = moveHistoryDisplay.scrollWidth; }
+        function getFaceColor(cubie, worldNormal) {
+            const localNormals = [ new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1) ];
+            for (let i = 0; i < localNormals.length; i++) {
+                const normal = localNormals[i].clone().applyQuaternion(cubie.quaternion).round();
+                if (normal.equals(worldNormal)) { return cubie.material[i].color; }
+            }
+            return null;
+        }
+        function checkIfSolved() {
+            const faces = [
+                { normal: new THREE.Vector3(0, 1, 0),  axis: 'y', layer: 1  }, { normal: new THREE.Vector3(0, -1, 0), axis: 'y', layer: -1 },
+                { normal: new THREE.Vector3(-1, 0, 0), axis: 'x', layer: -1 }, { normal: new THREE.Vector3(1, 0, 0),  axis: 'x', layer: 1  },
+                { normal: new THREE.Vector3(0, 0, 1),  axis: 'z', layer: 1  }, { normal: new THREE.Vector3(0, 0, -1), axis: 'z', layer: -1 }
+            ];
+            for (const face of faces) {
+                const axisVector = new THREE.Vector3(); axisVector[face.axis] = 1;
+                const slice = getSliceByLayer(axisVector, face.layer);
+                const centerCubie = slice.find(c => { const pos = getGridPosition(c.position); return (pos.x === 0 && pos.y === 0) || (pos.x === 0 && pos.z === 0) || (pos.y === 0 && pos.z === 0); });
+                if (!centerCubie) continue;
+                const referenceColor = getFaceColor(centerCubie, face.normal);
+                if (!referenceColor) continue; 
+                for (const cubie of slice) {
+                    const cubieColor = getFaceColor(cubie, face.normal);
+                    if (cubieColor && !cubieColor.equals(referenceColor)) { return false; }
+                }
+            }
+            stopTimer(); const timeMs = Date.now() - startTime;
+            if (isSolving) { addScore(timeMs, currentScramble, moveHistory); alert(`恭喜！复原成功，用时: ${formatTime(timeMs)}`); }
+            isScrambled = false; isSolving = false; return true;
+        }
+
+        function addScore(timeMs, scramble, solution) {
+            const solutionMoves = solution.join(' ');
+            const tps = (solution.length / (timeMs / 1000)) || 0;
+            const score = { id: Date.now(), timeMs, scramble, solution: solutionMoves, date: new Date(), tps };
+            scores.push(score);
+            scores.sort((a, b) => a.timeMs - b.timeMs);
+            renderScores();
+        }
+
+        // ★★★ JS改动: 列表现在按照最佳成绩排序 ★★★
+        function renderScores() {
+            scoresList.innerHTML = '';
+            const medals = ['🥇', '🥈', '🥉'];
+            scores.forEach((score, index) => {
+                const li = document.createElement('li');
+                li.className = 'score-item';
+                const medal = medals[index] || `<b>${index + 1}.</b>`;
+                const solutionArray = score.solution.split(/\s+/).filter(Boolean);
+                li.innerHTML = `
+                    <div class="score-item-header">
+                        <div>
+                            <span class="score-medal">${medal}</span>
+                            <span class="score-time">${formatTime(score.timeMs)}</span>
+                        </div>
+                        <span class="score-date">${new Date(score.date).toLocaleDateString()}</span>
+                    </div>
+                    <div class="score-details">
+                        <span>TPS: <b>${score.tps.toFixed(2)}</b></span>
+                        <span>Moves: <b>${solutionArray.length}</b></span>
+                    </div>
+                    <div class="score-actions">
+                        <button class="replay-btn" data-id="${score.id}" data-action="scramble">看打乱</button>
+                        <button class="replay-btn solution" data-id="${score.id}" data-action="solution">看解法</button>
+                        <button class="delete-btn" data-id="${score.id}" data-action="delete" title="删除此条成绩">🗑️</button>
+                    </div>`;
+                scoresList.appendChild(li);
+            });
+        }
+        
+        // ★★★ JS新增: 删除成绩的函数 ★★★
+        function deleteScore(scoreId) {
+            const scoreIndex = scores.findIndex(s => s.id === scoreId);
+            if (scoreIndex === -1) return;
+
+            const scoreToDelete = scores[scoreIndex];
+            if (confirm(`您确定要删除这条成绩吗？\n\n时间: ${formatTime(scoreToDelete.timeMs)}\n日期: ${new Date(scoreToDelete.date).toLocaleDateString()}`)) {
+                scores.splice(scoreIndex, 1);
+                renderScores(); // 重新渲染列表
+
+                // 如果统计窗口是打开的，也更新它
+                const chartContainer = document.getElementById('chart-container');
+                if (chartContainer.classList.contains('visible')) {
+                    renderTrendChart();
+                }
+            }
+        }
+
+        function calculateAoN(n) {
+            if (scores.length < n) return 'N/A';
+            const recent = [...scores].sort((a, b) => b.id - a.id).slice(0, n).map(s => s.timeMs);
+            if (recent.length < n) return 'N/A';
+            recent.sort((a, b) => a - b);
+            const trimmed = recent.slice(1, -1);
+            const sum = trimmed.reduce((acc, val) => acc + val, 0);
+            return formatTime(Math.round(sum / (n - 2)));
+        }
+
+        function calculateAverage() {
+            if (scores.length === 0) return 'N/A';
+            const sum = scores.reduce((acc, s) => acc + s.timeMs, 0);
+            return formatTime(Math.round(sum / scores.length));
+        }
+        
+        function updateStatsDisplay() {
+            document.getElementById('stat-pb').textContent = scores.length > 0 ? formatTime(scores[0].timeMs) : 'N/A';
+            document.getElementById('stat-ao5').textContent = calculateAoN(5);
+            document.getElementById('stat-ao12').textContent = calculateAoN(12);
+            document.getElementById('stat-avg').textContent = calculateAverage();
+        }
+        
+        function renderTrendChart() {
+            updateStatsDisplay();
+            if (trendChartInstance) trendChartInstance.destroy();
+            const chartWrapper = document.getElementById('chart-canvas-wrapper');
+            chartWrapper.innerHTML = '<canvas id="scores-chart"></canvas>';
+            const ctx = document.getElementById('scores-chart').getContext('2d');
+            const chartScores = [...scores].sort((a,b) => a.id - b.id).slice(-15);
+            if (chartScores.length < 2) {
+                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                ctx.fillStyle = '#888'; ctx.textAlign = 'center'; ctx.font = '14px "Segoe UI"';
+                ctx.fillText('需要至少2次成绩才能生成图表', ctx.canvas.width / 2, ctx.canvas.height / 2);
+                return;
+            };
+            const labels = chartScores.map((_, index) => `${index + 1}`);
+            const data = chartScores.map(s => s.timeMs);
+            trendChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Solve Time',
+                        data: data,
+                        borderColor: 'var(--highlight-color)', backgroundColor: 'rgba(97, 218, 251, 0.2)',
+                        borderWidth: 2, tension: 0.3, fill: true, pointBackgroundColor: 'var(--primary-color)',
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            ticks: { color: '#aaa', callback: value => `${value/1000}s` },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        },
+                        x: { ticks: { color: '#aaa' }, grid: { display: false } }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            displayColors: false,
+                            callbacks: {
+                                title: (tooltipItems) => `第 ${tooltipItems[0].label} 次成绩`,
+                                label: (context) => `用时: ${formatTime(context.parsed.y)}`,
+                                footer: (tooltipItems) => {
+                                    const dataIndex = tooltipItems[0].dataIndex;
+                                    const score = chartScores[dataIndex];
+                                    return new Date(score.date).toLocaleString('zh-CN');
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function exportScoresToCSV() {
+            if (scores.length === 0) { alert("没有成绩可以导出。"); return; }
+            const headers = ['Rank', 'ID', '日期', '时间 (ms)', '格式化时间', 'TPS', '打乱公式', '解法步骤'];
+            let csvContent = "data:text/csv;charset=utf-8," + headers.join(',') + '\n';
+            scores.forEach((score, index) => {
+                const escapeCSV = (str) => `"${String(str).replace(/"/g, '""')}"`;
+                const row = [
+                    index + 1, score.id, new Date(score.date).toLocaleString(), score.timeMs,
+                    formatTime(score.timeMs), score.tps.toFixed(2),
+                    escapeCSV(score.scramble), escapeCSV(score.solution)
+                ];
+                csvContent += row.join(',') + '\n';
+            });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+            link.setAttribute("download", `cube_scores_${timestamp}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // ★★★ JS改动: handleScoreboardClick 现在可以处理 delete 动作 ★★★
+        async function handleScoreboardClick(event) {
+            const target = event.target.closest('button');
+            if (isAnimating || !target || !target.dataset.action) return;
+            
+            const scoreId = parseInt(target.dataset.id);
+            const action = target.dataset.action;
+
+            if (action === 'delete') {
+                deleteScore(scoreId);
+                return;
+            }
+            
+            const score = scores.find(s => s.id === scoreId);
+            if (!score) return;
+            
+            resetCubeState();
+            currentScramble = score.scramble;
+            scrambleDisplay.value = score.scramble;
+            await executeMoveSequence(score.scramble, true);
+            
+            if (action === 'solution') {
+                const solutionMoves = score.solution.trim().split(/\s+/).filter(m => m);
+                moveHistoryDisplay.innerHTML = solutionMoves.map(move => `<span>${move}</span>`).join(' ');
+                alert('打乱完毕，准备回放解法...');
+                await executeMoveSequence(score.solution, true, moveHistoryDisplay);
+                if (isSolving) checkIfSolved();
+            } else {
+                moveHistoryDisplay.innerHTML = '';
+                isScrambled = true;
+            }
+        }
+        
+        function invertMove(move) {
+            const base = move.replace(/['2]/g, '');
+            if (move.includes('2')) return base + '2';
+            return move.includes("'") ? base : base + "'";
+        }
+        
+        function invertMovesArray(movesArr) {
+            return movesArr.slice().reverse().map(invertMove);
+        }
+        
+        function invertMovesStr(movesStr) {
+            if (!movesStr || !movesStr.trim()) return [];
+            const arr = movesStr.trim().split(/\s+/).filter(Boolean);
+            return invertMovesArray(arr);
+        }
+        
+        async function autoSolveByInverse() {
+            if (isAnimating) return;
+            const hasScramble = !!currentScramble && currentScramble.trim().length > 0;
+            const hasMoves = moveHistory.length > 0;
+            if (!hasScramble && !hasMoves) { alert('当前没有可用的打乱或操作记录，无法生成解法。'); return; }
+            const autoSolutionMoves = [...invertMovesArray(moveHistory), ...invertMovesStr(currentScramble)];
+            if (autoSolutionMoves.length === 0) { alert('已在复原状态或无可用步骤。'); return; }
+            moveHistory.push(...autoSolutionMoves);
+            updateMoveHistoryDisplay();
+            if (!isSolving) {
+                isSolving = true;
+                if (!timerInterval) startTimer();
+            }
+            await executeMoveSequence(autoSolutionMoves.join(' '));
+            checkIfSolved();
+        }
+    </script>
+</body>
+</html>
