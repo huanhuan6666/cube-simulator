@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cube-simulator-v1';
+const CACHE_NAME = 'cube-simulator-v2';
 const urlsToCache = [
   '/',
   '/index.html',
